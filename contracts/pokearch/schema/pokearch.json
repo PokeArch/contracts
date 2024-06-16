@@ -79,6 +79,18 @@
           }
         },
         "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "set_n_f_t_contract"
+        ],
+        "properties": {
+          "set_n_f_t_contract": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
       }
     ]
   },
@@ -98,12 +110,38 @@
           }
         },
         "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "check_allowance"
+        ],
+        "properties": {
+          "check_allowance": {
+            "type": "object",
+            "required": [
+              "addr"
+            ],
+            "properties": {
+              "addr": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
       }
     ]
   },
   "migrate": null,
   "sudo": null,
   "responses": {
+    "check_allowance": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Boolean",
+      "type": "boolean"
+    },
     "get_count": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "GetCountResponse",

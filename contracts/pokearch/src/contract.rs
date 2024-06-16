@@ -1,12 +1,15 @@
+use cw721_base::msg::ExecuteMsg as Cw721ExecuteMsg;
+
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{to_binary, Binary, CosmosMsg, Deps, DepsMut, Env, Empty ,MessageInfo, Response, StdResult};
+use cosmwasm_std::{to_json_binary, Binary, CosmosMsg, Deps, DepsMut, Env, Empty ,MessageInfo, Response, StdResult, BankMsg};
 use cw2::set_contract_version;
+
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, GetCountResponse, InstantiateMsg, QueryMsg};
 use crate::cwfees::{SudoMsg, MsgRegisterAsGranter, CwGrant};
-use crate::state::{State, STATE, ALLOWED_ADDRESSES, OWNER};
+use crate::state::{State, STATE, ALLOWED_ADDRESSES, OWNER, NFT_CONTRACT};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:pokearch";
@@ -66,6 +69,14 @@ pub fn execute(
             ALLOWED_ADDRESSES.save(deps.storage, deps.api.addr_validate(&addr)?, &Empty::default())?;
             Ok(Response::default())
         }
+        ExecuteMsg::SetNFTContract(addr) => {
+            if info.sender.to_string() == addr {
+                NFT_CONTRACT.save(deps.storage, &deps.api.addr_validate(&addr)?)?;
+                Ok(Response::default())
+            } else {
+                return Err(ContractError::Unauthorized {  })
+            }
+        }
     }
 }
 
@@ -96,7 +107,8 @@ pub mod execute {
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::GetCount {} => to_binary(&query::count(deps)?),
+        QueryMsg::GetCount {} => to_json_binary(&query::count(deps)?),
+        QueryMsg::CheckAllowance { addr } => to_json_binary(&query::check_allowance(deps, addr)?)
     }
 }
 
@@ -106,6 +118,9 @@ pub mod query {
     pub fn count(deps: Deps) -> StdResult<GetCountResponse> {
         let state = STATE.load(deps.storage)?;
         Ok(GetCountResponse { count: state.count })
+    }
+    pub fn check_allowance(deps: Deps, addr: String) -> StdResult<bool> {
+        Ok(ALLOWED_ADDRESSES.has(deps.storage, deps.api.addr_validate(&addr)?))
     }
 }
 
@@ -140,7 +155,7 @@ fn process_grant(deps: DepsMut, grant: CwGrant) -> Result<Response, ContractErro
 mod tests {
     use super::*;
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-    use cosmwasm_std::{coins, from_binary};
+    use cosmwasm_std::{coins, from_json};
 
     #[test]
     fn proper_initialization() {
@@ -155,7 +170,7 @@ mod tests {
 
         // it worked, let's query the state
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-        let value: GetCountResponse = from_binary(&res).unwrap();
+        let value: GetCountResponse = from_json(&res).unwrap();
         assert_eq!(17, value.count);
     }
 
@@ -174,7 +189,7 @@ mod tests {
 
         // should increase counter by 1
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-        let value: GetCountResponse = from_binary(&res).unwrap();
+        let value: GetCountResponse = from_json(&res).unwrap();
         assert_eq!(18, value.count);
     }
 
@@ -202,7 +217,7 @@ mod tests {
 
         // should now be 5
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-        let value: GetCountResponse = from_binary(&res).unwrap();
+        let value: GetCountResponse = from_json(&res).unwrap();
         assert_eq!(5, value.count);
     }
 }

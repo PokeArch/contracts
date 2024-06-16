@@ -60,6 +60,18 @@
         }
       },
       "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "set_n_f_t_contract"
+      ],
+      "properties": {
+        "set_n_f_t_contract": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     }
   ]
 }

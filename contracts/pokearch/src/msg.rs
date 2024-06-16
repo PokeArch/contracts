@@ -11,6 +11,7 @@ pub enum ExecuteMsg {
     Reset { count: i32 },
     RemoveAllowance(String),
     AddAllowance(String),
+    SetNFTContract(String),
 }
 
 #[cw_serde]
@@ -19,6 +20,8 @@ pub enum QueryMsg {
     // GetCount returns the current count as a json-encoded number
     #[returns(GetCountResponse)]
     GetCount {},
+    #[returns(bool)]
+    CheckAllowance { addr: String }
 }
 
 // We define a custom struct for each query response
