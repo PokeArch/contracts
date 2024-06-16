@@ -1,38 +1,50 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Player",
+  "title": "PlayerResponse",
   "type": "object",
   "required": [
-    "berries",
-    "default_pokemon",
-    "id",
-    "pokemons",
-    "potions"
+    "player"
   ],
   "properties": {
-    "berries": {
-      "type": "integer",
-      "format": "int32"
-    },
-    "default_pokemon": {
-      "type": "integer",
-      "format": "int32"
-    },
-    "id": {
-      "type": "string"
-    },
-    "pokemons": {
-      "type": "array",
-      "items": {
-        "$ref": "#/definitions/Pokemon"
-      }
-    },
-    "potions": {
-      "type": "integer",
-      "format": "int32"
+    "player": {
+      "$ref": "#/definitions/Player"
     }
   },
+  "additionalProperties": false,
   "definitions": {
+    "Player": {
+      "type": "object",
+      "required": [
+        "berries",
+        "default_pokemon",
+        "id",
+        "pokemons",
+        "potions"
+      ],
+      "properties": {
+        "berries": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "default_pokemon": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "id": {
+          "type": "string"
+        },
+        "pokemons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Pokemon"
+          }
+        },
+        "potions": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
     "Pokemon": {
       "type": "object",
       "required": [
