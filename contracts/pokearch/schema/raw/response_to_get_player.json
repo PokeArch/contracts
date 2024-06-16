@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Player",
+  "type": "object",
+  "required": [
+    "berries",
+    "default_pokemon",
+    "id",
+    "pokemons",
+    "potions"
+  ],
+  "properties": {
+    "berries": {
+      "type": "integer",
+      "format": "int32"
+    },
+    "default_pokemon": {
+      "type": "integer",
+      "format": "int32"
+    },
+    "id": {
+      "type": "string"
+    },
+    "pokemons": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Pokemon"
+      }
+    },
+    "potions": {
+      "type": "integer",
+      "format": "int32"
+    }
+  },
+  "definitions": {
+    "Pokemon": {
+      "type": "object",
+      "required": [
+        "health",
+        "index",
+        "token_id"
+      ],
+      "properties": {
+        "health": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "index": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "token_id": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    }
+  }
+}

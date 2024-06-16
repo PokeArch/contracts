@@ -13,6 +13,7 @@ pub struct State {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct Pokemon {
     pub token_id: i32,
+    pub index: i32,
     pub health: i32
 }
 
@@ -35,3 +36,5 @@ pub const ALLOWED_ADDRESSES: Map<Addr, Empty> = Map::new("allowed_addresses");
 pub const NFT_CONTRACT: Item<Addr> = Item::new("nft_contract");
 
 pub const PLAYERS: Map<String, Player> = Map::new("players");
+
+pub const TOKEN: Item<i32> = Item::new("token");

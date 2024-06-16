@@ -2,14 +2,14 @@ use cw721_base::msg::ExecuteMsg as Cw721ExecuteMsg;
 
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{to_json_binary, Binary, CosmosMsg, Deps, DepsMut, Env, Empty ,MessageInfo, Response, StdResult, BankMsg};
+use cosmwasm_std::{to_json_binary, Binary, CosmosMsg, Deps, DepsMut, Empty, Env, MessageInfo, Response, StdResult, WasmMsg};
 use cw2::set_contract_version;
 
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, GetCountResponse, InstantiateMsg, QueryMsg};
 use crate::cwfees::{SudoMsg, MsgRegisterAsGranter, CwGrant};
-use crate::state::{State, STATE, ALLOWED_ADDRESSES, OWNER, NFT_CONTRACT};
+use crate::state::{State, STATE, ALLOWED_ADDRESSES, OWNER, NFT_CONTRACT, PLAYERS};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:pokearch";
@@ -29,19 +29,20 @@ pub fn instantiate(
     };
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     STATE.save(deps.storage, &state)?;
-    let contract_address = env.contract.address;
+    let contract_address = env.clone().contract.address;
 
     OWNER.save(deps.storage, &info.sender)?;
+    ALLOWED_ADDRESSES.save(deps.storage, info.sender.clone(), &Empty {})?;
 
     let contract_address = contract_address.to_string();
     let regsiter_msg = MsgRegisterAsGranter {
         granting_contract: contract_address.clone(),
     };
     let register_stargate_msg = CosmosMsg::Stargate {
-        type_url: "/archway.cwfees.v1.MsgRegisterAsGranter".to_string(),
+        type_url: "/archway.cwfees.v1.Msgenv.contract.addressRegisterAsGranter".to_string(),
         value: Binary::from(prost::Message::encode_to_vec(&regsiter_msg)),
     };
-
+    
 
     Ok(Response::new()
         .add_attribute("method", "instantiate")
@@ -54,7 +55,7 @@ pub fn instantiate(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
@@ -69,18 +70,14 @@ pub fn execute(
             ALLOWED_ADDRESSES.save(deps.storage, deps.api.addr_validate(&addr)?, &Empty::default())?;
             Ok(Response::default())
         }
-        ExecuteMsg::SetNFTContract(addr) => {
-            if info.sender.to_string() == addr {
-                NFT_CONTRACT.save(deps.storage, &deps.api.addr_validate(&addr)?)?;
-                Ok(Response::default())
-            } else {
-                return Err(ContractError::Unauthorized {  })
-            }
-        }
+        ExecuteMsg::SetNFTContract { addr, token_uri } => execute::set_nft_address(deps, info, env, addr, token_uri),
+        ExecuteMsg::Register { id } => execute::register(deps, id)
     }
 }
 
 pub mod execute {
+    use crate::state::{Player, Pokemon, TOKEN};
+
     use super::*;
 
     pub fn increment(deps: DepsMut) -> Result<Response, ContractError> {
@@ -102,17 +99,100 @@ pub mod execute {
         })?;
         Ok(Response::new().add_attribute("action", "reset"))
     }
+
+    pub fn set_nft_address(deps: DepsMut, info: MessageInfo, env: Env, addr: String, token_uri: String) -> Result<Response, ContractError> {
+        let owner = OWNER.load(deps.storage)?;
+        if info.sender.to_string() == owner.to_string() {
+            let mint: Cw721ExecuteMsg<(), Empty> = Cw721ExecuteMsg::Mint { 
+                token_id: 0.to_string(), 
+                owner: env.contract.address.to_string(), 
+                token_uri: Some(token_uri), 
+                extension: () 
+            };
+
+            let wasm_msg = WasmMsg::Execute {
+                contract_addr: addr.clone(),
+                msg: to_json_binary(&mint)?,
+                funds: Vec::new(),
+            };
+            NFT_CONTRACT.save(deps.storage, &deps.api.addr_validate(&addr.clone())?)?;
+            TOKEN.save(deps.storage, &(0 as i32))?;
+            Ok(Response::new().add_message(wasm_msg))
+        } else {
+            return Err(ContractError::Unauthorized {  })
+        }
+    }
+
+    pub fn register(deps: DepsMut, id: String) -> Result<Response, ContractError> {
+        if PLAYERS.has(deps.storage, id.clone()) {
+            return Err(ContractError::Unauthorized {  })
+        }
+        let mut pokemon: Vec<Pokemon> = Vec::new();
+        pokemon.push(Pokemon {
+            token_id: 0,
+            index: 0,
+            health: 100
+        });
+
+        let player_data = Player {
+            id: id.clone(),
+            potions: 0,
+            berries: 0,
+            default_pokemon: 0,
+            pokemons: pokemon
+        };
+        PLAYERS.save(deps.storage, id.clone(), &player_data)?;
+        Ok(Response::default())
+    }
+
+
+
+    pub fn catch_pokemon(deps: DepsMut, info: MessageInfo, env: Env, id: String, token_uri: String) -> Result<Response, ContractError> {
+        if PLAYERS.has(deps.storage, id.clone()) {
+            return Err(ContractError::Unauthorized {  })
+        }
+        
+        let token = TOKEN.load(deps.storage)?;
+        let nft_address = NFT_CONTRACT.load(deps.storage)?;
+
+        let mint: Cw721ExecuteMsg<(), Empty> = Cw721ExecuteMsg::Mint { 
+            token_id: (token+1).to_string(), 
+            owner: info.sender.clone().to_string(), 
+            token_uri: Some(token_uri), 
+            extension: () 
+        };
+
+        let wasm_msg = WasmMsg::Execute {
+            contract_addr: nft_address.clone().to_string(),
+            msg: to_json_binary(&mint)?,
+            funds: Vec::new(),
+        };
+
+        let mut player = PLAYERS.load(deps.storage, id.clone())?;
+        player.pokemons.push(Pokemon {
+            token_id: token+1,
+            index: (player.pokemons.len() as i32)-1,
+            health: 100
+        });
+
+        PLAYERS.save(deps.storage, id.clone(), &player)?;
+        Ok(Response::new().add_message(wasm_msg))
+
+    }
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::GetCount {} => to_json_binary(&query::count(deps)?),
-        QueryMsg::CheckAllowance { addr } => to_json_binary(&query::check_allowance(deps, addr)?)
+        QueryMsg::CheckAllowance { addr } => to_json_binary(&query::check_allowance(deps, addr)?),
+        QueryMsg::GetPlayer { id } => to_json_binary(&query::get_player(deps, id)?)
     }
 }
 
 pub mod query {
+    use crate::state::Player;
+
     use super::*;
 
     pub fn count(deps: Deps) -> StdResult<GetCountResponse> {
@@ -121,6 +201,10 @@ pub mod query {
     }
     pub fn check_allowance(deps: Deps, addr: String) -> StdResult<bool> {
         Ok(ALLOWED_ADDRESSES.has(deps.storage, deps.api.addr_validate(&addr)?))
+    }
+    pub fn get_player(deps: Deps, id: String) -> StdResult<Player> {
+        let player = PLAYERS.load(deps.storage, id)?;
+        Ok(player)
     }
 }
 

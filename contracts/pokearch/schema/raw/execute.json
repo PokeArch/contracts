@@ -68,7 +68,41 @@
       ],
       "properties": {
         "set_n_f_t_contract": {
-          "type": "string"
+          "type": "object",
+          "required": [
+            "addr",
+            "token_uri"
+          ],
+          "properties": {
+            "addr": {
+              "type": "string"
+            },
+            "token_uri": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "register"
+      ],
+      "properties": {
+        "register": {
+          "type": "object",
+          "required": [
+            "id"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

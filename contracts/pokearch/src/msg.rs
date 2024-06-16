@@ -1,5 +1,7 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
 
+use crate::state::Player;
+
 #[cw_serde]
 pub struct InstantiateMsg {
     pub count: i32,
@@ -11,7 +13,8 @@ pub enum ExecuteMsg {
     Reset { count: i32 },
     RemoveAllowance(String),
     AddAllowance(String),
-    SetNFTContract(String),
+    SetNFTContract{ addr: String, token_uri: String },
+    Register { id: String },
 }
 
 #[cw_serde]
@@ -21,7 +24,9 @@ pub enum QueryMsg {
     #[returns(GetCountResponse)]
     GetCount {},
     #[returns(bool)]
-    CheckAllowance { addr: String }
+    CheckAllowance { addr: String },
+    #[returns(Player)]
+    GetPlayer { id: String }
 }
 
 // We define a custom struct for each query response
