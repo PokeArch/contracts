@@ -71,7 +71,11 @@ pub fn execute(
             Ok(Response::default())
         }
         ExecuteMsg::SetNFTContract { addr, token_uri } => execute::set_nft_address(deps, info, env, addr, token_uri),
-        ExecuteMsg::Register { id } => execute::register(deps, id)
+        ExecuteMsg::Register { id } => execute::register(deps, id),
+        ExecuteMsg::CatchPokemon { id, token_uri } => execute::catch_pokemon(deps, info, env, id, token_uri),
+        ExecuteMsg::UpdateHealth { id, token_id } => execute::update_health(deps, id, token_id),
+        ExecuteMsg::CollectBerries { id } => execute::collect_berries(deps, id),
+        ExecuteMsg::SetDefaultPokemon { id, pokemon } => execute::set_default_pokemon(deps, id, pokemon)
     }
 }
 
@@ -145,13 +149,31 @@ pub mod execute {
         Ok(Response::default())
     }
 
+    pub fn update_health(deps: DepsMut, id: String, token_id: i32) -> Result<Response, ContractError> {
+        let mut player = PLAYERS.load(deps.storage, id.clone())?;
+        player.pokemons[token_id as usize].health = 100;
+        PLAYERS.save(deps.storage, id.clone(), &player)?;
+        Ok(Response::default())
+    }
 
+    pub fn collect_berries(deps: DepsMut, id: String) -> Result<Response, ContractError> {
+        let mut player = PLAYERS.load(deps.storage, id.clone())?;
+        player.berries += 1;
+        PLAYERS.save(deps.storage, id.clone(), &player)?;
+        Ok(Response::default())
+    }
+
+    pub fn set_default_pokemon(deps: DepsMut, id: String, pokemon: i32) -> Result<Response, ContractError> {
+        let mut player = PLAYERS.load(deps.storage, id.clone())?;
+        player.default_pokemon = pokemon;
+        PLAYERS.save(deps.storage, id.clone(), &player)?;
+        Ok(Response::default())
+    }
 
     pub fn catch_pokemon(deps: DepsMut, info: MessageInfo, env: Env, id: String, token_uri: String) -> Result<Response, ContractError> {
         if PLAYERS.has(deps.storage, id.clone()) {
             return Err(ContractError::Unauthorized {  })
         }
-        
         let token = TOKEN.load(deps.storage)?;
         let nft_address = NFT_CONTRACT.load(deps.storage)?;
 
@@ -191,7 +213,8 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 }
 
 pub mod query {
-    use crate::state::Player;
+
+    use crate::msg::PlayerResponse;
 
     use super::*;
 
@@ -202,9 +225,9 @@ pub mod query {
     pub fn check_allowance(deps: Deps, addr: String) -> StdResult<bool> {
         Ok(ALLOWED_ADDRESSES.has(deps.storage, deps.api.addr_validate(&addr)?))
     }
-    pub fn get_player(deps: Deps, id: String) -> StdResult<Player> {
+    pub fn get_player(deps: Deps, id: String) -> StdResult<PlayerResponse> {
         let player = PLAYERS.load(deps.storage, id)?;
-        Ok(player)
+        Ok(PlayerResponse {player})
     }
 }
 

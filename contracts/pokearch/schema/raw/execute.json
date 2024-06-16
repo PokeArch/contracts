@@ -106,6 +106,104 @@
         }
       },
       "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "catch_pokemon"
+      ],
+      "properties": {
+        "catch_pokemon": {
+          "type": "object",
+          "required": [
+            "id",
+            "token_uri"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "token_uri": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "update_health"
+      ],
+      "properties": {
+        "update_health": {
+          "type": "object",
+          "required": [
+            "id",
+            "token_id"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "token_id": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "collect_berries"
+      ],
+      "properties": {
+        "collect_berries": {
+          "type": "object",
+          "required": [
+            "id"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "set_default_pokemon"
+      ],
+      "properties": {
+        "set_default_pokemon": {
+          "type": "object",
+          "required": [
+            "id",
+            "pokemon"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "pokemon": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     }
   ]
 }

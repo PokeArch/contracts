@@ -15,6 +15,10 @@ pub enum ExecuteMsg {
     AddAllowance(String),
     SetNFTContract{ addr: String, token_uri: String },
     Register { id: String },
+    CatchPokemon { id: String, token_uri: String },
+    UpdateHealth { id: String, token_id: i32 },
+    CollectBerries { id: String },
+    SetDefaultPokemon { id: String, pokemon: i32 },
 }
 
 #[cw_serde]
@@ -25,7 +29,7 @@ pub enum QueryMsg {
     GetCount {},
     #[returns(bool)]
     CheckAllowance { addr: String },
-    #[returns(Player)]
+    #[returns(PlayerResponse)]
     GetPlayer { id: String }
 }
 
@@ -33,4 +37,9 @@ pub enum QueryMsg {
 #[cw_serde]
 pub struct GetCountResponse {
     pub count: i32,
+}
+
+#[cw_serde]
+pub struct PlayerResponse {
+    pub player: Player
 }
