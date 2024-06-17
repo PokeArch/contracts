@@ -7,9 +7,9 @@ use cw2::set_contract_version;
 
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, GetCountResponse, InstantiateMsg, QueryMsg};
+use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
 use crate::cwfees::{SudoMsg, MsgRegisterAsGranter, CwGrant};
-use crate::state::{State, STATE, ALLOWED_ADDRESSES, OWNER, NFT_CONTRACT, PLAYERS};
+use crate::state::{ALLOWED_ADDRESSES, OWNER, NFT_CONTRACT, PLAYERS};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:pokearch";
@@ -21,14 +21,9 @@ pub fn instantiate(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    msg: InstantiateMsg,
+    _msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
-    let state = State {
-        count: msg.count,
-        owner: info.sender.clone(),
-    };
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-    STATE.save(deps.storage, &state)?;
     let contract_address = env.clone().contract.address;
 
     OWNER.save(deps.storage, &info.sender)?;
@@ -47,7 +42,6 @@ pub fn instantiate(
     Ok(Response::new()
         .add_attribute("method", "instantiate")
         .add_attribute("owner", info.sender)
-        .add_attribute("count", msg.count.to_string())
         .add_attribute("action", "register")
         .add_message(register_stargate_msg))
 }
@@ -60,8 +54,6 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::Increment {} => execute::increment(deps),
-        ExecuteMsg::Reset { count } => execute::reset(deps, info, count),
         ExecuteMsg::RemoveAllowance(addr) => {
             ALLOWED_ADDRESSES.remove(deps.storage, deps.api.addr_validate(&addr)?);
             Ok(Response::default())
@@ -72,7 +64,7 @@ pub fn execute(
         }
         ExecuteMsg::SetNFTContract { addr, token_uri } => execute::set_nft_address(deps, info, env, addr, token_uri),
         ExecuteMsg::Register { id } => execute::register(deps, id),
-        ExecuteMsg::CatchPokemon { id, token_uri } => execute::catch_pokemon(deps, info, env, id, token_uri),
+        ExecuteMsg::CatchPokemon { id, token_uri, health, curr_pokemon } => execute::catch_pokemon(deps, info, env, id, token_uri, health, curr_pokemon),
         ExecuteMsg::UpdateHealth { id, token_id } => execute::update_health(deps, id, token_id),
         ExecuteMsg::CollectBerries { id } => execute::collect_berries(deps, id),
         ExecuteMsg::SetDefaultPokemon { id, pokemon } => execute::set_default_pokemon(deps, id, pokemon)
@@ -83,26 +75,6 @@ pub mod execute {
     use crate::state::{Player, Pokemon, TOKEN};
 
     use super::*;
-
-    pub fn increment(deps: DepsMut) -> Result<Response, ContractError> {
-        STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
-            state.count += 1;
-            Ok(state)
-        })?;
-
-        Ok(Response::new().add_attribute("action", "increment"))
-    }
-
-    pub fn reset(deps: DepsMut, info: MessageInfo, count: i32) -> Result<Response, ContractError> {
-        STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
-            if info.sender != state.owner {
-                return Err(ContractError::Unauthorized {});
-            }
-            state.count = count;
-            Ok(state)
-        })?;
-        Ok(Response::new().add_attribute("action", "reset"))
-    }
 
     pub fn set_nft_address(deps: DepsMut, info: MessageInfo, env: Env, addr: String, token_uri: String) -> Result<Response, ContractError> {
         let owner = OWNER.load(deps.storage)?;
@@ -170,10 +142,8 @@ pub mod execute {
         Ok(Response::default())
     }
 
-    pub fn catch_pokemon(deps: DepsMut, info: MessageInfo, env: Env, id: String, token_uri: String) -> Result<Response, ContractError> {
-        if PLAYERS.has(deps.storage, id.clone()) {
-            return Err(ContractError::Unauthorized {  })
-        }
+    pub fn catch_pokemon(deps: DepsMut, info: MessageInfo, env: Env, id: String, token_uri: String, health: i32, curr_pokemon: i32) -> Result<Response, ContractError> {
+
         let token = TOKEN.load(deps.storage)?;
         let nft_address = NFT_CONTRACT.load(deps.storage)?;
 
@@ -193,9 +163,10 @@ pub mod execute {
         let mut player = PLAYERS.load(deps.storage, id.clone())?;
         player.pokemons.push(Pokemon {
             token_id: token+1,
-            index: (player.pokemons.len() as i32)-1,
+            index: (player.pokemons.len() as i32),
             health: 100
         });
+        player.pokemons[curr_pokemon as usize].health = health;
 
         PLAYERS.save(deps.storage, id.clone(), &player)?;
         Ok(Response::new().add_message(wasm_msg))
@@ -206,7 +177,6 @@ pub mod execute {
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::GetCount {} => to_json_binary(&query::count(deps)?),
         QueryMsg::CheckAllowance { addr } => to_json_binary(&query::check_allowance(deps, addr)?),
         QueryMsg::GetPlayer { id } => to_json_binary(&query::get_player(deps, id)?)
     }
@@ -218,10 +188,6 @@ pub mod query {
 
     use super::*;
 
-    pub fn count(deps: Deps) -> StdResult<GetCountResponse> {
-        let state = STATE.load(deps.storage)?;
-        Ok(GetCountResponse { count: state.count })
-    }
     pub fn check_allowance(deps: Deps, addr: String) -> StdResult<bool> {
         Ok(ALLOWED_ADDRESSES.has(deps.storage, deps.api.addr_validate(&addr)?))
     }
@@ -260,71 +226,179 @@ fn process_grant(deps: DepsMut, grant: CwGrant) -> Result<Response, ContractErro
 
 #[cfg(test)]
 mod tests {
+    use std::alloc::System;
+
+    use crate::msg::PlayerResponse;
+    use crate::state::{Player, Pokemon};
+
     use super::*;
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-    use cosmwasm_std::{coins, from_json};
+    use cosmwasm_std::{coins, from_json, Addr};
 
     #[test]
     fn proper_initialization() {
         let mut deps = mock_dependencies();
 
-        let msg = InstantiateMsg { count: 17 };
+        let msg = InstantiateMsg {  };
         let info = mock_info("creator", &coins(1000, "earth"));
 
         // we can just call .unwrap() to assert this was a success
         let res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
+        assert_eq!(1, res.messages.len());
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::CheckAllowance { addr: Addr::unchecked("creator").to_string() }).unwrap();
+        let value: bool = from_json(&res).unwrap();
+        assert_eq!(true, value);
+    }
+
+    #[test]
+    fn set_nft_address() {
+        let mut deps = mock_dependencies();
+        let msg = InstantiateMsg {  };
+        let info = mock_info("creator", &coins(1000, "earth"));
+
+        // we can just call .unwrap() to assert this was a success
+        let _res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
+
+        let msg = ExecuteMsg::SetNFTContract { addr: Addr::unchecked("nft").to_string(), token_uri: String::from("hello") };
+        let info = mock_info("creator", &[]);
+
+        let res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
+        assert_eq!(1, res.messages.len());
+    }
+
+    #[test]
+    fn add_allowance() {
+        let mut deps = mock_dependencies();
+        let msg = ExecuteMsg::AddAllowance(Addr::unchecked("sender").to_string());
+        let info = mock_info("sender", &[]);
+
+        let res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
         assert_eq!(0, res.messages.len());
 
-        // it worked, let's query the state
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-        let value: GetCountResponse = from_json(&res).unwrap();
-        assert_eq!(17, value.count);
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::CheckAllowance { addr: Addr::unchecked("sender").to_string() }).unwrap();
+        let value: bool = from_json(&res).unwrap();
+        assert_eq!(true, value);
     }
 
     #[test]
-    fn increment() {
+    fn register() {
         let mut deps = mock_dependencies();
+        let msg = InstantiateMsg {  };
+        let info = mock_info("creator", &coins(1000, "earth"));
 
-        let msg = InstantiateMsg { count: 17 };
-        let info = mock_info("creator", &coins(2, "token"));
+        // we can just call .unwrap() to assert this was a success
         let _res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
 
-        // beneficiary can release it
-        let info = mock_info("anyone", &coins(2, "token"));
-        let msg = ExecuteMsg::Increment {};
+        let msg = ExecuteMsg::Register { id: "hello.arch".to_string() };
+        let info = mock_info("sender", &[]);
+
+        let res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
+        assert_eq!(0, res.messages.len());
+
+        let mut pokemon: Vec<Pokemon> = Vec::new();
+        pokemon.push(Pokemon {
+            token_id: 0,
+            index: 0,
+            health: 100
+        });
+
+        let player_data = Player {
+            id: String::from("hello.arch"),
+            potions: 0,
+            berries: 0,
+            default_pokemon: 0,
+            pokemons: pokemon
+        };
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetPlayer { id: String::from("hello.arch") }).unwrap();
+        let value: PlayerResponse = from_json(&res).unwrap();
+        assert_eq!(PlayerResponse{player: player_data}, value);
+
+    }
+
+    #[test]
+    fn test_game() {
+        let mut deps = mock_dependencies();
+
+        let msg = InstantiateMsg {  };
+        let info = mock_info("creator", &coins(1000, "earth"));
+
+        // we can just call .unwrap() to assert this was a success
+        let _res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
+
+        let msg = ExecuteMsg::SetNFTContract { addr: "nft".to_string(), token_uri: String::from("hello") };
+        let info = mock_info("creator", &[]);
+
         let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
 
-        // should increase counter by 1
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-        let value: GetCountResponse = from_json(&res).unwrap();
-        assert_eq!(18, value.count);
+        let msg = ExecuteMsg::Register { id: String::from("hello.arch") };
+        let info = mock_info("sender", &[]);
+
+        let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
+
+        let msg = ExecuteMsg::CatchPokemon { id: String::from("hello.arch"), token_uri: String::from("hello"), health: 32, curr_pokemon: 0};
+        let info = mock_info("sender", &[]);
+
+
+        let res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
+        assert_eq!(1, res.messages.len());
+
+        let mut pokemon: Vec<Pokemon> = Vec::new();
+        pokemon.push(Pokemon {
+            token_id: 0,
+            index: 0,
+            health: 32
+        });
+
+        pokemon.push(Pokemon {
+            token_id: 1,
+            index: 1,
+            health: 100
+        });
+
+        let player_data = Player {
+            id: String::from("hello.arch"),
+            potions: 0,
+            berries: 0,
+            default_pokemon: 0,
+            pokemons: pokemon
+        };
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetPlayer { id: String::from("hello.arch") }).unwrap();
+        let value: PlayerResponse = from_json(&res).unwrap();
+        assert_eq!(PlayerResponse {player: player_data}, value);
+
+        let msg = ExecuteMsg::UpdateHealth { id: String::from("hello.arch"), token_id: 0};
+        let info = mock_info("sender", &[]);
+
+        let res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
+        assert_eq!(0, res.messages.len());
+
+        let mut pokemon: Vec<Pokemon> = Vec::new();
+        pokemon.push(Pokemon {
+            token_id: 0,
+            index: 0,
+            health: 100
+        });
+
+        pokemon.push(Pokemon {
+            token_id: 1,
+            index: 1,
+            health: 100
+        });
+
+        let player_data = Player {
+            id: String::from("hello.arch"),
+            potions: 0,
+            berries: 0,
+            default_pokemon: 0,
+            pokemons: pokemon
+        };
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetPlayer { id: String::from("hello.arch") }).unwrap();
+        let value: PlayerResponse = from_json(&res).unwrap();
+        assert_eq!(PlayerResponse {player: player_data}, value);
     }
 
-    #[test]
-    fn reset() {
-        let mut deps = mock_dependencies();
-
-        let msg = InstantiateMsg { count: 17 };
-        let info = mock_info("creator", &coins(2, "token"));
-        let _res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
-
-        // beneficiary can release it
-        let unauth_info = mock_info("anyone", &coins(2, "token"));
-        let msg = ExecuteMsg::Reset { count: 5 };
-        let res = execute(deps.as_mut(), mock_env(), unauth_info, msg);
-        match res {
-            Err(ContractError::Unauthorized {}) => {}
-            _ => panic!("Must return unauthorized error"),
-        }
-
-        // only the original creator can reset the counter
-        let auth_info = mock_info("creator", &coins(2, "token"));
-        let msg = ExecuteMsg::Reset { count: 5 };
-        let _res = execute(deps.as_mut(), mock_env(), auth_info, msg).unwrap();
-
-        // should now be 5
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-        let value: GetCountResponse = from_json(&res).unwrap();
-        assert_eq!(5, value.count);
-    }
 }

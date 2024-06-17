@@ -5,12 +5,6 @@ use cosmwasm_std::{Addr, Empty};
 use cw_storage_plus::{Item, Map};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-pub struct State {
-    pub count: i32,
-    pub owner: Addr,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct Pokemon {
     pub token_id: i32,
     pub index: i32,
@@ -26,8 +20,6 @@ pub struct Player {
     pub default_pokemon: i32,
     pub pokemons: Vec<Pokemon>
 }
-
-pub const STATE: Item<State> = Item::new("state");
 
 pub const OWNER: Item<Addr> = Item::new("owner");
 
