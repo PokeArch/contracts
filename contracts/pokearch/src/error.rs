@@ -13,5 +13,5 @@ pub enum ContractError {
     #[error("not allowed to spend fees on contract {0}")]
     DisallowedContract(String),
     #[error("decode error")]
-    DecodeError(#[from] ::prost::DecodeError)
+    DecodeError(#[from] ::prost::DecodeError),
 }

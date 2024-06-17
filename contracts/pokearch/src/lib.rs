@@ -1,7 +1,7 @@
 pub mod contract;
+pub mod cwfees;
 mod error;
 pub mod msg;
 pub mod state;
-pub mod cwfees;
 
 pub use crate::error::ContractError;

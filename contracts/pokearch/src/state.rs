@@ -8,9 +8,8 @@ use cw_storage_plus::{Item, Map};
 pub struct Pokemon {
     pub token_id: i32,
     pub index: i32,
-    pub health: i32
+    pub health: i32,
 }
-
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct Player {
@@ -18,7 +17,7 @@ pub struct Player {
     pub potions: i32,
     pub berries: i32,
     pub default_pokemon: i32,
-    pub pokemons: Vec<Pokemon>
+    pub pokemons: Vec<Pokemon>,
 }
 
 pub const OWNER: Item<Addr> = Item::new("owner");
