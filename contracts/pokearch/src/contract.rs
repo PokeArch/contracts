@@ -1,4 +1,4 @@
-use cw721_base::msg::ExecuteMsg as Cw721ExecuteMsg;
+use andromeda_non_fungible_tokens::cw721::ExecuteMsg as Cw721ExecuteMsg;
 
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
@@ -35,7 +35,7 @@ pub fn instantiate(
         granting_contract: contract_address.clone(),
     };
     let register_stargate_msg = CosmosMsg::Stargate {
-        type_url: "/archway.cwfees.v1.Msgenv.contract.addressRegisterAsGranter".to_string(),
+        type_url: "/archway.cwfees.v1.MsgRegisterAsGranter".to_string(),
         value: Binary::from(prost::Message::encode_to_vec(&regsiter_msg)),
     };
 
@@ -85,6 +85,8 @@ pub fn execute(
 }
 
 pub mod execute {
+    use andromeda_non_fungible_tokens::cw721::TokenExtension;
+
     use crate::state::{Player, Pokemon, TOKEN};
 
     use super::*;
@@ -98,11 +100,13 @@ pub mod execute {
     ) -> Result<Response, ContractError> {
         let owner = OWNER.load(deps.storage)?;
         if info.sender.to_string() == owner.to_string() {
-            let mint: Cw721ExecuteMsg<(), Empty> = Cw721ExecuteMsg::Mint {
+            let mint: Cw721ExecuteMsg = Cw721ExecuteMsg::Mint {
                 token_id: 0.to_string(),
                 owner: env.contract.address.to_string(),
                 token_uri: Some(token_uri),
-                extension: (),
+                extension: TokenExtension {
+                    publisher: "PokeArch".to_string(),
+                },
             };
 
             let wasm_msg = WasmMsg::Execute {
@@ -181,11 +185,13 @@ pub mod execute {
         let token = TOKEN.load(deps.storage)?;
         let nft_address = NFT_CONTRACT.load(deps.storage)?;
 
-        let mint: Cw721ExecuteMsg<(), Empty> = Cw721ExecuteMsg::Mint {
+        let mint: Cw721ExecuteMsg = Cw721ExecuteMsg::Mint {
             token_id: (token + 1).to_string(),
             owner: info.sender.clone().to_string(),
             token_uri: Some(token_uri),
-            extension: (),
+            extension: TokenExtension {
+                publisher: "PokeArch".to_string(),
+            },
         };
 
         let wasm_msg = WasmMsg::Execute {
@@ -203,6 +209,7 @@ pub mod execute {
         player.pokemons[curr_pokemon as usize].health = health;
 
         PLAYERS.save(deps.storage, id.clone(), &player)?;
+        TOKEN.save(deps.storage, &(token + 1))?;
         Ok(Response::new().add_message(wasm_msg))
     }
 }
@@ -239,7 +246,7 @@ pub fn sudo(deps: DepsMut, _env: Env, msg: SudoMsg) -> Result<Response, Contract
 }
 
 fn process_grant(deps: DepsMut, grant: CwGrant) -> Result<Response, ContractError> {
-    const TYPE_URL: &str = "/cosmwasm.wasm.v1.MsgExecuteContract";
+    const TYPE_URL: &str = "cosmwasm.wasm.v1.MsgExecuteContract";
 
     for msg in grant.msgs {
         // we check if all the senders are in the allow list
@@ -498,5 +505,16 @@ mod tests {
             },
             value
         );
+        let msg = ExecuteMsg::CatchPokemon {
+            id: String::from("hello.arch"),
+            token_uri: String::from("hello"),
+            health: 32,
+            curr_pokemon: 0,
+        };
+        let info = mock_info("sender", &[]);
+
+        let res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
+        assert_eq!(1, res.messages.len());
+
     }
 }
